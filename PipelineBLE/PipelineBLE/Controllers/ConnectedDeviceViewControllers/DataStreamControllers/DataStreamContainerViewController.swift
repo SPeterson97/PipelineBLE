@@ -40,7 +40,7 @@ class DataStreamContainerViewController: UIViewController {
     var maxEntries: UISlider = {
         let slider = UISlider()
         slider.minimumValue = 5
-        slider.maximumValue = 100
+        slider.maximumValue = 3000
         slider.translatesAutoresizingMaskIntoConstraints = false
         return slider
     }()
@@ -55,7 +55,7 @@ class DataStreamContainerViewController: UIViewController {
     fileprivate var startTime: CFAbsoluteTime!
     fileprivate var dataSetForPeripherals = [UUID: [LineChartDataSet]]()
     fileprivate var lastUpdatedData: LineChartDataSet?
-    fileprivate var visibleInterval: TimeInterval = 30
+    fileprivate var visibleInterval: TimeInterval = 500
     var isAutoScrollEnabled: Bool = true
     var dataCounter: [UUID : Int] = [:]
     var basicDataSet: [UUID:[[[Double]]]] = [ : ]
@@ -522,23 +522,33 @@ class DataStreamContainerViewController: UIViewController {
     @objc func onClickStart(_ send: UIBarButtonItem){
         //  Send a given command to the device
         let alert = UIAlertController(title: "Start Data Stream", message: "Please enter the necessary information to start the data stream: ", preferredStyle: .alert)
-        alert.addTextField{(textfield) in
+        alert.addTextField{ (textfield) in
+            textfield.placeholder = "Sampling Frequency MHz (1, 2, 4, 8)"
+        }
+        alert.addTextField{ (textfield) in
             textfield.placeholder = "Number of runs"
         }
         alert.addTextField{ (textfield) in
             textfield.placeholder = "Number of samples (default 500)"
         }
-        /*
-        alert.addTextField{ (textfield) in
-            textfield.placeholder = "Filename (w/o extension)"
-        }*/
         
         //  Add the action to the alert and present to user
         let action = UIAlertAction(title: "Start", style: .default){ (_) in
             let runsText = alert.textFields?.first!.text ?? ""
             let lengthText = alert.textFields?.last!.text ?? "500" //500 by default
+            let frequencyText = alert.textFields?.last!.text ?? ""
             
             //  Try to get values as an int
+            guard let frequency = Int(frequencyText) else {
+                self.invalidInput(message: "Invalid value entered for the frequency. Please try again.")
+                return
+            }
+            
+            if frequency != 1 || frequency != 2 || frequency != 4 || frequency != 8 {
+                self.invalidInput(message: "Frequency must be 1MHz, 2MHz, 4MHz, or 8MHz. Please try again.")
+                return
+            }
+            
             guard let runs = Int(runsText) else {
                 self.invalidInput(message: "Invalid value entered for the number of runs. Please try again.")
                 return
@@ -559,7 +569,9 @@ class DataStreamContainerViewController: UIViewController {
             
             //  Alert the devices that are connected
             for peripheral in BleManager.shared.connectedPeripherals(){
-                //  Will be sending the number of samples first, then run x times
+                // Will send frequency, samples, then run count
+                self.send(message: "s"+String(frequency)+"\n", peripheral: peripheral)
+                usleep(500000)
                 self.send(message: "t"+String(samples)+"\n", peripheral: peripheral)
                 usleep(500000)
                 self.send(message: "r"+String(runs)+"\n", peripheral: peripheral)
